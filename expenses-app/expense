@@ -1,0 +1,84 @@
+#!/usr/bin/env node
+
+const PROCESS = require('process');
+const { Client } = require('pg');
+
+let client = new Client({ database: 'project_1'});
+
+async function listExpenses() {
+  await client.connect().catch(err => logAndExit(err));
+  let res = await client.query("SELECT * FROM expenses ORDER BY created_on ASC").catch(err => logAndExit(err));
+  
+  res.rows.forEach(row => {
+    let rowToText = [
+      `${row.id}`,
+      `${row.created_on.toDateString().padStart(10, ' ')}`,
+      `${row.amount.padStart(12, ' ')}`,
+      `${row.memo}`,
+      ];
+    
+    console.log(rowToText.join(' | '));
+  });
+
+  await client.end().catch(err => logAndExit(err));
+}
+
+function logAndExit(error) {
+  console.log(error);
+  process.exit(1);
+}
+
+async function addExpense(amount, memo) {
+  await client.connect().catch(err => logAndExit(err));
+  let date = new Date();
+  date = date.toLocaleDateString();
+
+  const queryText = "INSERT INTO expenses (amount, memo, created_on) VALUES ($1, $2, $3)";
+  const queryValues = [amount, memo, date];
+  await client.query(queryText, queryValues).catch(err => logAndExit(err));
+
+  await client.end().catch(err => logAndExit(err));
+}
+
+function displayHelp() {
+  console.log("An expense recording system\n");
+  console.log("Commands:\n");
+
+  let commands = [
+    "add AMOUNT MEMO [DATE] - record a new expense",
+    "clear - delete all expenses",
+    "list - list all expenses",
+    "delete NUMBER - remove expense with id NUMBER",
+    "search QUERY - list expenses with a matching memo field"
+  ];
+
+  console.log(commands.join("\n"));
+}
+
+function logError() {
+  console.log("You must provide an amount and memo.");
+}
+
+let args = PROCESS.argv;
+let command = args[2];
+
+if (command === 'list') {
+  listExpenses();
+} else if (command === 'add') {
+  let amount = args[3];
+  let memo = args[4];
+
+  if (amount && memo) {
+    addExpense(amount, memo);
+  } else {
+    logError();
+  }
+} else {
+  displayHelp();
+}
+
+/*
+ - check if amount, memo are included
+ - if they are, make the query to insert data into the database
+ - if they aren't then return an error message
+*/
