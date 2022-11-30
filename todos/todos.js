@@ -3,7 +3,6 @@ const morgan = require("morgan");
 const flash = require("express-flash");
 const session = require("express-session");
 const { body, validationResult } = require("express-validator");
-const TodoList = require("./lib/todolist");
 const store = require("connect-loki");
 const SessionPersistence = require('./lib/session-persistence');
 
@@ -85,18 +84,32 @@ app.post("/lists",
       .isLength({ max: 100 })
       .withMessage("List title must be between 1 and 100 characters.")
   ],
-  (req, res) => {
+  (req, res, next) => {
+    let rerenderNewListPage = () => {
+      res.render("new-list", {
+        flash: req.flash(),
+        todoListTitle,
+      });
+    };
+
+    let todoListTitle = req.body.todoListTitle;
+    let store = res.locals.store;
+
     let errors = validationResult(req);
     if (!errors.isEmpty()) {
       errors.array().forEach(message => req.flash("error", message.msg));
-      res.render("new-list", {
-        flash: req.flash(),
-        todoListTitle: req.body.todoListTitle,
-      });
+      rerenderNewListPage();
+    } else if (store.existsTodoListTitle(todoListTitle)) {
+      req.flash("error", "The list title must be unique.");
+      rerenderNewListPage();
     } else {
-      req.session.todoLists.push(new TodoList(req.body.todoListTitle));
-      req.flash("success", "The todo list has been created.");
-      res.redirect("/lists");
+      let newTodoListCreated = store.createTodoList(todoListTitle);
+      if (!newTodoListCreated) {
+        next(new Error("Failed to create new todo list."));
+      } else {
+        req.flash("success", "The todo list has been created.");
+        res.redirect("/lists");
+      }
     }
   }
 );
@@ -241,32 +254,35 @@ app.post("/lists/:todoListId/edit",
       .withMessage("List title must be between 1 and 100 characters.")
   ],
   (req, res, next) => {
+    let store = res.locals.store;
     let todoListId = req.params.todoListId;
-    let todoList = res.locals.store.loadTodoList(+todoListId);
+    let todoListTitle = req.body.todoListTitle;
 
-    if (!todoList) {
+    const rerenderEditList = () => {
+      let todoList = store.loadTodoList(+todoListId);
+      if (!todoList) {
+        next(new Error("Not found."));
+      } else {
+        res.render("edit-list", {
+          todoListTitle,
+          todoList,
+          flash: req.flash(),
+        });
+      }
+    };
+    
+    let errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      errors.array().forEach(message => req.flash("error", message.msg));
+      rerenderEditList();
+    } else if (store.existsTodoListTitle(todoListTitle)) {
+      req.flash("error", "The list title must be unique.");
+      rerenderEditList();
+    } else if (!store.setTitleTodoList(+todoListId, todoListTitle)) {
       next(new Error("Not found."));
     } else {
-      let todoListTitle = req.body.todoListTitle;
-      let errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        errors.array().forEach(message => req.flash("error", message.msg));
-
-        res.render("edit-list", {
-          flash: req.flash(),
-          todoListTitle,
-          todoList: todoList,
-        });
-      } else {
-        let titleHasBeenEdited = res.locals.store.setTitleTodoList(+todoListId, todoListTitle);
-
-        if (!titleHasBeenEdited) {
-          next(new Error("Not found."));
-        } else {
-          req.flash("success", "Todo list updated.");
-          res.redirect(`/lists/${todoListId}`);
-        }
-      }
+      req.flash("success", "Todo list updated.");
+      res.redirect(`/lists/${todoListId}`);
     }
   }
 );
