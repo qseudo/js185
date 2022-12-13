@@ -2,6 +2,7 @@ extends layout
 
 block main
   if todoLists === undefined || todoLists.length === 0
+    if signedIn
     p#no_list You don't have any todo lists. Why not create one?
   else
     ul#lists
@@ -13,5 +14,6 @@ block main
             p #{todoInfo.countDoneTodos} / #{todoInfo.countAllTodos}
 
 block headerLinks
-  .actions
-    a.add(href="/lists/new") New List
+  if signedIn
+    .actions
+      a.add(href="/lists/new") New List
