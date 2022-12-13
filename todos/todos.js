@@ -52,7 +52,7 @@ app.use((req, res, next) => {
 const requiresAuthentication = (req, res, next) => {
   if (!res.locals.signedIn) {
     console.log("Unauthorized.");
-    res.status(401).send("Unauthorized.");
+    res.redirect('/users/signin');
   } else {
     next();
   }
@@ -65,6 +65,7 @@ app.get("/", (req, res) => {
 
 // Render the list of todo lists
 app.get("/lists",
+  requiresAuthentication,
   catchError(async (req, res) => {
     let store = res.locals.store;
     let todoLists = await store.sortedTodoLists();
@@ -134,6 +135,7 @@ app.post("/lists",
 
 // Render individual todo list and its todos
 app.get("/lists/:todoListId",
+  requiresAuthentication,
   catchError(async (req, res) => {
     let todoListId = req.params.todoListId;
     let todoList = await res.locals.store.loadTodoList(+todoListId);
@@ -325,11 +327,13 @@ app.get("/users/signin", (req, res) => {
   });
 });
 
-app.post("/users/signin", (req, res) => {
+app.post("/users/signin", 
+  catchError(async (req, res) => {
+  
   let username = req.body.username.trim();
   let password = req.body.password;
 
-  if (username === 'admin' && password === 'secret') {
+  if (await res.locals.store.authenticate(username, password)) {
     req.session.username = username;
     req.session.signedIn = true;
     req.flash("info", "Welcome!");
@@ -341,7 +345,8 @@ app.post("/users/signin", (req, res) => {
       flash: req.flash(),
     });
   }
-});
+  })
+);
 
 app.post("/users/signout", (req, res) => {
   delete req.session.username;
