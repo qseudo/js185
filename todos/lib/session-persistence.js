@@ -125,5 +125,11 @@ module.exports = class SessionPersistence {
 
     return true;
   }
+
+  // returns `true` if `error` seems to indicate `UNIQUE` constraint
+  // violation in data, `false` otherwise
+  isUniqueConstraintViolation(_error) {
+    return false;
+  }
 };
 
